@@ -1,0 +1,76 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: asia-southeast1
+  SERVICE: simple-rag
+  REPOSITORY: cloud-run
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Artifact Registry repository
+        run: |
+          gcloud artifacts repositories describe "${{ env.REPOSITORY }}" \
+            --location "${{ env.REGION }}" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "${{ env.REPOSITORY }}" \
+            --repository-format=docker \
+            --location "${{ env.REGION }}" \
+            --description="Cloud Run container images"
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}
+          flags: >-
+            --allow-unauthenticated
+            --memory=2Gi
+            --cpu=2
+            --timeout=300
+          env_vars: |
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+            LLM_MODEL=nvidia/nemotron-3.5-lightning:free
+            EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+            ENVIRONMENT=production
+            LOG_LEVEL=INFO
+
+      - name: Show service URL
+        run: gcloud run services describe "${{ env.SERVICE }}" --region "${{ env.REGION }}" --format='value(status.url)'
