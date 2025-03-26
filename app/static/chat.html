@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple RAG</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
+
         * {
             margin: 0;
             padding: 0;
@@ -12,23 +14,23 @@
         }
 
         :root {
-            --primary-color: #4f46e5;
-            --primary-light: #6366f1;
-            --primary-dark: #4338ca;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --text-muted: #9ca3af;
-            --bg-primary: #f9fafb;
-            --bg-secondary: #ffffff;
-            --border-color: #e5e7eb;
-            --border-light: #f3f4f6;
-            --shadow: 0 4px 20px rgba(0,0,0,0.08);
-            --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+            --primary-color: #0f766e;
+            --primary-light: #14b8a6;
+            --primary-dark: #115e59;
+            --text-primary: #17211f;
+            --text-secondary: #64736f;
+            --text-muted: #94a3a0;
+            --bg-primary: #eef4f1;
+            --bg-secondary: #fbfdfc;
+            --border-color: #d7e2de;
+            --border-light: #e7efeb;
+            --shadow: 0 4px 20px rgba(22, 55, 48, 0.08);
+            --shadow-lg: 0 18px 55px rgba(22, 55, 48, 0.14);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f8fafc 50%, #f1f5f9 100%);
+            font-family: 'Manrope', sans-serif;
+            background: radial-gradient(circle at 15% 15%, #d8eee8 0, transparent 32%), linear-gradient(135deg, #f3f8f5 0%, #dfece7 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -48,6 +50,22 @@
             grid-template-columns: 1fr 480px;
             overflow: hidden;
             backdrop-filter: blur(10px);
+            position: relative;
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .app-container.sidebar-collapsed {
+            grid-template-columns: 1fr 0;
+        }
+
+        .app-container.sidebar-collapsed .editor-section {
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .app-container.sidebar-collapsed #closePanelBtn {
+            display: none;
         }
 
         /* Chat Section */
@@ -65,6 +83,10 @@
             padding: 20px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         }
 
         .chat-header h1 {
@@ -78,6 +100,59 @@
             font-size: 14px;
             color: var(--text-secondary);
             margin: 0;
+        }
+
+        .header-copy {
+            min-width: 0;
+        }
+
+        .panel-toggle,
+        .sidebar-rail button {
+            width: 38px;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 18px;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .panel-toggle:hover,
+        .sidebar-rail button:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .panel-toggle:focus-visible,
+        .sidebar-rail button:focus-visible,
+        .tab-button:focus-visible,
+        .save-button:focus-visible {
+            outline: 3px solid rgba(20, 184, 166, 0.3);
+            outline-offset: 2px;
+        }
+
+        .sidebar-rail {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 18px;
+            z-index: 5;
+        }
+
+        .sidebar-collapsed .sidebar-rail {
+            display: block;
+        }
+
+        .sidebar-rail button {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
         }
 
         .status {
@@ -486,6 +561,10 @@
             .editor-section {
                 max-height: 400px;
             }
+
+            .app-container.sidebar-collapsed {
+                grid-template-rows: 1fr 0;
+            }
         }
 
         @media (max-width: 768px) {
@@ -509,6 +588,27 @@
             .editor-header h2 {
                 font-size: 16px;
             }
+
+            .chat-header {
+                padding: 16px;
+            }
+
+            .panel-toggle {
+                flex: 0 0 auto;
+            }
+
+            .sidebar-rail {
+                top: 14px;
+                right: 14px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
@@ -517,8 +617,11 @@
         <!-- Chat Section -->
         <div class="chat-section">
             <div class="chat-header">
-                <h1>Customer Support</h1>
-                <p>Chat with our AI assistant for help with orders, returns, and policies</p>
+                <div class="header-copy">
+                    <h1>Customer Support</h1>
+                    <p>Chat with our AI assistant for help with orders, returns, and policies</p>
+                </div>
+                <button class="panel-toggle" id="closePanelBtn" type="button" onclick="toggleEditor(false)" aria-label="Close knowledge base panel" title="Close knowledge base panel">×</button>
             </div>
             
             <div class="status" id="status">Checking connection...</div>
@@ -527,11 +630,11 @@
                 <div class="message bot">
                     <div class="message-avatar">✨</div>
                     <div class="message-content">
-                        Welcome to the AI Assistant! 👋
+                        Welcome to the AI Assistant!
                         <br><br>
-                        I can help you with:
-                        • Questions about policies and services
-                        • Return and shipping information
+                        I can help you with:<br>
+                        • Questions about policies and services<br>
+                        • Return and shipping information<br>
                         • Customer support inquiries
                         <br><br>
                         You can also edit the knowledge base documents on the right panel and update the vector database in real-time!
@@ -555,6 +658,10 @@
                 <input type="text" id="messageInput" placeholder="Ask me anything about our policies..." maxlength="500">
                 <button onclick="sendMessage()" id="sendBtn">Send</button>
             </div>
+        </div>
+
+        <div class="sidebar-rail" id="sidebarRail">
+            <button type="button" onclick="toggleEditor(true)" aria-label="Open knowledge base panel" title="Open knowledge base panel">+</button>
         </div>
 
         <!-- Document Editor Section -->
@@ -614,6 +721,7 @@
         const documentsContainer = document.getElementById('documentsContainer');
         const saveBtn = document.getElementById('saveBtn');
         const notification = document.getElementById('notification');
+        const appContainer = document.querySelector('.app-container');
 
         let documents = [];
         let currentTab = 'documents';
@@ -622,10 +730,24 @@
         init();
 
         async function init() {
+            if (localStorage.getItem('rag-editor-panel') === 'closed') {
+                toggleEditor(false);
+            }
             await checkHealth();
             await loadDocuments();
             messageInput.focus();
         }
+
+        function toggleEditor(shouldOpen) {
+            appContainer.classList.toggle('sidebar-collapsed', !shouldOpen);
+            localStorage.setItem('rag-editor-panel', shouldOpen ? 'open' : 'closed');
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !appContainer.classList.contains('sidebar-collapsed')) {
+                toggleEditor(false);
+            }
+        });
 
         // Send message on Enter key
         messageInput.addEventListener('keypress', function(e) {
