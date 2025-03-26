@@ -12,7 +12,20 @@ env:
   REPOSITORY: cloud-run
 
 jobs:
+  validate:
+    name: Validate container build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build container
+        run: docker build -t simple-rag:ci .
+
   deploy:
+    if: ${{ vars.GCP_PROJECT_ID != '' }}
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
