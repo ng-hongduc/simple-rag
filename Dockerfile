@@ -9,8 +9,16 @@ ENV PYTHONUNBUFFERED=1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
-COPY sql ./sql
-COPY main.py .
+# Copy application code
+COPY . .
+
+# Create a non-root user
+RUN useradd --create-home --shell /bin/bash app \
+    && mkdir -p /models \
+    && chown -R app:app /app /models
+USER app
+
+# Expose port (Cloud Run uses PORT environment variable)
+EXPOSE 8080
 
 CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
